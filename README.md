@@ -72,6 +72,9 @@ dashboard/app.py
 5. Click Deploy
 
 ---
+# PhonePe India Analytics Dashboard
+ [Live Demo on Streamlit](https://phonepeanalyticsbasic.streamlit.app/)
+
 
 ## Sample Insights
 
