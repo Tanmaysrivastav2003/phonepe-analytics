@@ -8,9 +8,9 @@ conn = duckdb.connect(str(DB_PATH))
 
 print("Connected to DuckDB")
 
-# Define meaningful business insights
+# Define business-useful queries
 queries = {
-    "States with Lowest App Open Rate": """
+    "States with Lowest App Engagement Rate": """
         SELECT 
             state, 
             year,
@@ -24,7 +24,7 @@ queries = {
         LIMIT 10;
     """,
 
-    "App Opens vs Transactions Efficiency (Example: Maharashtra)": """
+    "Transactions per App Open (Maharashtra example)": """
         SELECT 
             mu.quarter,
             SUM(mu.app_opens) AS opens,
@@ -38,7 +38,7 @@ queries = {
         ORDER BY mu.quarter;
     """,
 
-    "Top Growing States by Transaction Volume": """
+    "Top States by Transaction Growth": """
         SELECT 
             state,
             MIN(year) AS start_year,
@@ -55,7 +55,7 @@ queries = {
         LIMIT 10;
     """,
 
-    "Quarterly Heatmap of Transactions by State": """
+    "Quarterly Transaction Volume by State": """
         SELECT 
             state, 
             CONCAT(year, '-Q', quarter) AS time_period,

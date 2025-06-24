@@ -3,16 +3,15 @@ import duckdb
 import pandas as pd
 import plotly.express as px
 
-# Connect to DuckDB
+# Connect to DuckDB database
 conn = duckdb.connect("db/phonepe_data.duckdb")
 
-# Streamlit page config
-st.set_page_config(page_title="PhonePe Insights Dashboard", layout="wide")
-st.title("PhonePe Analytics - Strategic Insights")
+st.set_page_config(page_title="PhonePe Business Insights Dashboard", layout="wide")
+st.title("PhonePe Business Analytics")
 
-# Query 1: States with Lowest App Open Rate
-st.header("1. States with Lowest App Open Rate")
-low_open_df = conn.execute("""
+# Query 1: States with Lowest App Engagement Rate
+st.header("States with Lowest App Engagement Rate")
+df1 = conn.execute("""
     SELECT 
         state, 
         year,
@@ -25,13 +24,12 @@ low_open_df = conn.execute("""
     ORDER BY open_rate_pct ASC
     LIMIT 10;
 """).fetchdf()
-st.dataframe(low_open_df, use_container_width=True)
-fig1 = px.bar(low_open_df, x='state', y='open_rate_pct', color='year', title="Lowest App Open Rates")
+fig1 = px.bar(df1, x="state", y="open_rate_pct", color="year", title="Lowest App Open Rates by State")
 st.plotly_chart(fig1, use_container_width=True)
 
-# Query 2: App Opens vs Transactions Efficiency for Maharashtra
-st.header("2. Maharashtra: Transactions per App Open")
-maha_df = conn.execute("""
+# Query 2: Transactions per App Open (Maharashtra)
+st.header("Transactions per App Open (Maharashtra)")
+df2 = conn.execute("""
     SELECT 
         mu.quarter,
         SUM(mu.app_opens) AS opens,
@@ -44,11 +42,12 @@ maha_df = conn.execute("""
     GROUP BY mu.quarter
     ORDER BY mu.quarter;
 """).fetchdf()
-st.line_chart(maha_df.set_index("quarter")[["txn_per_open"]])
+fig2 = px.line(df2, x="quarter", y="txn_per_open", markers=True, title="Transaction Efficiency per App Open in Maharashtra")
+st.plotly_chart(fig2, use_container_width=True)
 
-# Query 3: Top Growing States by Transaction Volume
-st.header("3. Top Growing States by Transaction Volume")
-growth_df = conn.execute("""
+# Query 3: Top States by Transaction Growth
+st.header("Top States by Transaction Growth")
+df3 = conn.execute("""
     SELECT 
         state,
         MIN(year) AS start_year,
@@ -64,13 +63,12 @@ growth_df = conn.execute("""
     ORDER BY growth_pct DESC
     LIMIT 10;
 """).fetchdf()
-st.dataframe(growth_df, use_container_width=True)
-fig2 = px.bar(growth_df, x="state", y="growth_pct", title="Top States by Transaction Growth (%)")
-st.plotly_chart(fig2, use_container_width=True)
+fig3 = px.bar(df3, x="state", y="growth_pct", title="Top States by Transaction Growth (%)")
+st.plotly_chart(fig3, use_container_width=True)
 
-# Query 4: Heatmap of Quarterly Transactions by State
-st.header("4. Quarterly Heatmap of Transactions by State")
-heatmap_df = conn.execute("""
+# Query 4: Quarterly Transaction Volume by State
+st.header("Quarterly Transaction Volume by State")
+df4 = conn.execute("""
     SELECT 
         state, 
         CONCAT(year, '-Q', quarter) AS time_period,
@@ -79,12 +77,9 @@ heatmap_df = conn.execute("""
     GROUP BY state, year, quarter
     ORDER BY state, year, quarter;
 """).fetchdf()
-
-pivot = heatmap_df.pivot(index='state', columns='time_period', values='total_txn_amount').fillna(0)
-st.dataframe(pivot, use_container_width=True)
-fig3 = px.imshow(pivot, labels=dict(color="Total Amount"),
-                 aspect="auto", title="Heatmap of Quarterly Transactions")
-st.plotly_chart(fig3, use_container_width=True)
+fig4 = px.density_heatmap(df4, x="time_period", y="state", z="total_txn_amount",
+                          title="Heatmap of Transaction Volume by State and Quarter",
+                          nbinsx=30, color_continuous_scale="Viridis")
+st.plotly_chart(fig4, use_container_width=True)
 
 conn.close()
-
