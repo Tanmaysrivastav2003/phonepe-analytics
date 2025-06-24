@@ -6,11 +6,11 @@ import pandas as pd
 DB_PATH = Path("db/phonepe_data.duckdb")
 conn = duckdb.connect(str(DB_PATH))
 
-print("✅ Connected to DuckDB")
+print("Connected to DuckDB")
 
-# Define business-critical queries
+# Define meaningful business insights
 queries = {
-    "Low App Opens but High User Base": """
+    "States with Lowest App Open Rate": """
         SELECT 
             state, 
             year,
@@ -19,35 +19,13 @@ queries = {
             ROUND(SUM(app_opens) * 100.0 / NULLIF(SUM(registered_users), 0), 2) AS open_rate_pct
         FROM aggregated_users
         GROUP BY state, year
-        HAVING total_users > 10000
+        HAVING total_users > 1000
         ORDER BY open_rate_pct ASC
         LIMIT 10;
     """,
 
-    "Year-on-Year Growth in Transactions Per State": """
+    "App Opens vs Transactions Efficiency (Example: Maharashtra)": """
         SELECT 
-            state, 
-            year, 
-            ROUND(SUM(amount)/10000000, 2) AS amount_cr
-        FROM aggregated_transactions
-        GROUP BY state, year
-        ORDER BY state, year;
-    """,
-
-    "Transaction Type Composition by State": """
-        SELECT 
-            state,
-            transaction_type,
-            SUM(amount) AS total_amount
-        FROM aggregated_transactions
-        GROUP BY state, transaction_type
-        ORDER BY state, transaction_type;
-    """,
-
-    "App Opens vs Transactions Correlation": """
-        SELECT 
-            mu.state, 
-            mu.year, 
             mu.quarter,
             SUM(mu.app_opens) AS opens,
             SUM(mt.count) AS txns,
@@ -55,27 +33,43 @@ queries = {
         FROM map_users mu
         JOIN map_transactions mt 
           ON mu.state = mt.state AND mu.year = mt.year AND mu.quarter = mt.quarter
-        GROUP BY mu.state, mu.year, mu.quarter
-        ORDER BY txn_per_open ASC;
+        WHERE mu.state = 'maharashtra'
+        GROUP BY mu.quarter
+        ORDER BY mu.quarter;
     """,
 
-    "Merchant vs P2P Ratio per State": """
+    "Top Growing States by Transaction Volume": """
         SELECT 
-            state,
-            SUM(CASE WHEN transaction_type = 'Merchant payments' THEN amount ELSE 0 END) AS merchant_amt,
-            SUM(CASE WHEN transaction_type = 'Peer-to-peer payments' THEN amount ELSE 0 END) AS p2p_amt,
-            ROUND(SUM(CASE WHEN transaction_type = 'Merchant payments' THEN amount ELSE 0 END) * 100.0 / NULLIF(SUM(amount), 0), 2) AS merchant_ratio
+            state, 
+            MIN(year) AS start_year,
+            MAX(year) AS end_year,
+            MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year) AS min_amount,
+            MAX(SUM(amount)) OVER (PARTITION BY state ORDER BY year) AS max_amount,
+            ROUND((MAX(SUM(amount)) OVER (PARTITION BY state ORDER BY year) - 
+                  MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year)) / NULLIF(MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year), 0) * 100, 2) AS growth_pct
         FROM aggregated_transactions
-        GROUP BY state
-        ORDER BY merchant_ratio ASC;
+        GROUP BY state, year
+        HAVING growth_pct IS NOT NULL
+        ORDER BY growth_pct DESC
+        LIMIT 10;
+    """,
+
+    "Quarterly Heatmap of Transactions by State": """
+        SELECT 
+            state, 
+            CONCAT(year, '-Q', quarter) AS time_period,
+            SUM(amount) AS total_txn_amount
+        FROM aggregated_transactions
+        GROUP BY state, year, quarter
+        ORDER BY state, year, quarter;
     """
 }
 
 # Run and display results
 for name, query in queries.items():
-    print(f"\n🔎 {name}")
+    print(f"\n{name}")
     df = conn.execute(query).fetchdf()
     print(df)
 
 conn.close()
-print("\n✅ All queries executed.")
+print("All queries executed.")
