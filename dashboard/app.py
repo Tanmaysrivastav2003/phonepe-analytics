@@ -60,8 +60,9 @@ merchant_vs_p2p = conn.execute("""
 fig_merchant = px.bar(merchant_vs_p2p.sort_values("merchant_ratio", ascending=False).head(10), x="state", y="merchant_ratio", title="Top 10 States by Merchant Payment Ratio")
 st.plotly_chart(fig_merchant, use_container_width=True)
 
-# App Opens vs Transactions
+# App Opens vs Transactions Efficiency
 st.subheader("App Opens vs Transactions Efficiency")
+
 txn_vs_open = conn.execute("""
     SELECT 
         mu.state, 
@@ -76,8 +77,25 @@ txn_vs_open = conn.execute("""
     GROUP BY mu.state, mu.year, mu.quarter
     ORDER BY txn_per_open ASC;
 """).fetchdf()
-fig_efficiency = px.scatter(txn_vs_open, x="opens", y="txns", size="txn_per_open", color="state", title="Transactions vs App Opens")
-st.plotly_chart(fig_efficiency, use_container_width=True)
+
+# Clean invalid data
+txn_vs_open = txn_vs_open.dropna(subset=["txn_per_open"])
+txn_vs_open = txn_vs_open[txn_vs_open["txn_per_open"] != float('inf')]
+
+# Only show if valid data exists
+if not txn_vs_open.empty:
+    fig_efficiency = px.scatter(
+        txn_vs_open,
+        x="opens",
+        y="txns",
+        size="txn_per_open",
+        color="state",
+        title="Transactions vs App Opens"
+    )
+    st.plotly_chart(fig_efficiency, use_container_width=True)
+else:
+    st.info("No valid data available to visualize transactions vs app opens.")
+
 
 # States with Low App Open Rates
 st.subheader("States with Low App Opens Despite Large User Base")
