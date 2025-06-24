@@ -40,15 +40,16 @@ queries = {
 
     "Top Growing States by Transaction Volume": """
         SELECT 
-            state, 
+            state,
             MIN(year) AS start_year,
             MAX(year) AS end_year,
-            MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year) AS min_amount,
-            MAX(SUM(amount)) OVER (PARTITION BY state ORDER BY year) AS max_amount,
-            ROUND((MAX(SUM(amount)) OVER (PARTITION BY state ORDER BY year) - 
-                  MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year)) / NULLIF(MIN(SUM(amount)) OVER (PARTITION BY state ORDER BY year), 0) * 100, 2) AS growth_pct
-        FROM aggregated_transactions
-        GROUP BY state, year
+            ROUND((MAX(yearly_amount) - MIN(yearly_amount)) * 100.0 / NULLIF(MIN(yearly_amount), 0), 2) AS growth_pct
+        FROM (
+            SELECT state, year, SUM(amount) AS yearly_amount
+            FROM aggregated_transactions
+            GROUP BY state, year
+        ) AS yearly_data
+        GROUP BY state
         HAVING growth_pct IS NOT NULL
         ORDER BY growth_pct DESC
         LIMIT 10;
