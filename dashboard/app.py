@@ -18,88 +18,9 @@ states = conn.execute("SELECT DISTINCT state FROM aggregated_transactions ORDER 
 selected_year = st.sidebar.selectbox("Select Year", years, index=len(years)-1)
 selected_state = st.sidebar.selectbox("Select State", states)
 
-# Year-on-Year Transaction Growth
-st.subheader("Year-on-Year Growth in Transactions Per State")
-growth_df = conn.execute("""
-    SELECT 
-        state, 
-        year, 
-        ROUND(SUM(amount)/10000000, 2) AS amount_cr
-    FROM aggregated_transactions
-    GROUP BY state, year
-    ORDER BY state, year;
-""").fetchdf()
-fig_growth = px.line(growth_df[growth_df['state'] == selected_state], x="year", y="amount_cr", title=f"Transaction Growth in {selected_state}")
-st.plotly_chart(fig_growth, use_container_width=True)
-
-# Transaction Type Composition
-st.subheader(f"Transaction Type Breakdown in {selected_state}")
-txn_types = conn.execute(f"""
-    SELECT 
-        transaction_type,
-        SUM(amount) AS total_amount
-    FROM aggregated_transactions
-    WHERE state = '{selected_state}'
-    GROUP BY transaction_type
-""").fetchdf()
-fig_txn_type = px.pie(txn_types, names="transaction_type", values="total_amount", title="Transaction Composition")
-st.plotly_chart(fig_txn_type, use_container_width=True)
-
-# Merchant vs Peer-to-Peer Ratio
-st.subheader("Merchant vs Peer-to-Peer Transaction Share")
-merchant_vs_p2p = conn.execute("""
-    SELECT 
-        state,
-        SUM(CASE WHEN transaction_type = 'Merchant payments' THEN amount ELSE 0 END) AS merchant_amt,
-        SUM(CASE WHEN transaction_type = 'Peer-to-peer payments' THEN amount ELSE 0 END) AS p2p_amt,
-        ROUND(SUM(CASE WHEN transaction_type = 'Merchant payments' THEN amount ELSE 0 END) * 100.0 / NULLIF(SUM(amount), 0), 2) AS merchant_ratio
-    FROM aggregated_transactions
-    GROUP BY state
-    ORDER BY merchant_ratio ASC;
-""").fetchdf()
-fig_merchant = px.bar(merchant_vs_p2p.sort_values("merchant_ratio", ascending=False).head(10), x="state", y="merchant_ratio", title="Top 10 States by Merchant Payment Ratio")
-st.plotly_chart(fig_merchant, use_container_width=True)
-
-# App Opens vs Transactions Efficiency
-st.subheader("App Opens vs Transactions Efficiency")
-
-txn_vs_open = conn.execute("""
-    SELECT 
-        mu.state, 
-        mu.year, 
-        mu.quarter,
-        SUM(mu.app_opens) AS opens,
-        SUM(mt.count) AS txns,
-        ROUND(SUM(mt.count) * 1.0 / NULLIF(SUM(mu.app_opens), 0), 2) AS txn_per_open
-    FROM map_users mu
-    JOIN map_transactions mt 
-      ON mu.state = mt.state AND mu.year = mt.year AND mu.quarter = mt.quarter
-    GROUP BY mu.state, mu.year, mu.quarter
-    ORDER BY txn_per_open ASC;
-""").fetchdf()
-
-# Clean invalid data
-txn_vs_open = txn_vs_open.dropna(subset=["txn_per_open"])
-txn_vs_open = txn_vs_open[txn_vs_open["txn_per_open"] != float('inf')]
-
-# Only show if valid data exists
-if not txn_vs_open.empty:
-    fig_efficiency = px.scatter(
-        txn_vs_open,
-        x="opens",
-        y="txns",
-        size="txn_per_open",
-        color="state",
-        title="Transactions vs App Opens"
-    )
-    st.plotly_chart(fig_efficiency, use_container_width=True)
-else:
-    st.info("No valid data available to visualize transactions vs app opens.")
-
-
-# States with Low App Open Rates
+# Section: States with Low App Opens Despite Large User Base
 st.subheader("States with Low App Opens Despite Large User Base")
-low_opens = conn.execute("""
+low_opens_query = """
     SELECT 
         state, 
         year,
@@ -108,11 +29,39 @@ low_opens = conn.execute("""
         ROUND(SUM(app_opens) * 100.0 / NULLIF(SUM(registered_users), 0), 2) AS open_rate_pct
     FROM aggregated_users
     GROUP BY state, year
-    HAVING total_users > 10000
+    HAVING total_users > 1000
     ORDER BY open_rate_pct ASC
     LIMIT 10;
-""").fetchdf()
-fig_low_open = px.bar(low_opens, x="state", y="open_rate_pct", text="open_rate_pct", title="Low App Open Rate States")
-st.plotly_chart(fig_low_open, use_container_width=True)
+"""
+low_opens_df = conn.execute(low_opens_query).fetchdf()
+if not low_opens_df.empty:
+    fig_low_opens = px.bar(low_opens_df, x="state", y="open_rate_pct", color="year", title="Lowest App Open Rate by State")
+    st.plotly_chart(fig_low_opens, use_container_width=True)
+else:
+    st.info("No data available for Low App Opens analysis.")
+
+# Section: App Opens vs Transactions Efficiency (State-wise Dropdown)
+st.subheader("App Opens vs Transactions Efficiency")
+st_efficiency = st.selectbox("Select State for Efficiency Analysis", states)
+efficiency_query = f"""
+    SELECT 
+        mu.quarter,
+        SUM(mu.app_opens) AS opens,
+        SUM(mt.count) AS txns,
+        ROUND(SUM(mt.count) * 1.0 / NULLIF(SUM(mu.app_opens), 0), 2) AS txn_per_open
+    FROM map_users mu
+    JOIN map_transactions mt 
+      ON mu.state = mt.state AND mu.year = mt.year AND mu.quarter = mt.quarter
+    WHERE mu.state = '{st_efficiency}'
+    GROUP BY mu.quarter
+    ORDER BY mu.quarter;
+"""
+txn_vs_open = conn.execute(efficiency_query).fetchdf()
+if not txn_vs_open.empty:
+    fig_efficiency = px.line(txn_vs_open, x="quarter", y="txn_per_open", markers=True,
+                              title=f"Quarterly Transactions per App Open in {st_efficiency}")
+    st.plotly_chart(fig_efficiency, use_container_width=True)
+else:
+    st.warning(f"No data found for {st_efficiency}.")
 
 conn.close()
